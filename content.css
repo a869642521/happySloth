@@ -1,0 +1,217 @@
+.vco-hover-ring {
+  position: absolute;
+  z-index: 2147483646;
+  pointer-events: none;
+  border: 2px solid #111111;
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 99999px rgba(0, 0, 0, 0.12),
+    0 12px 30px rgba(0, 0, 0, 0.16);
+  transition:
+    left 0.08s ease,
+    top 0.08s ease,
+    width 0.08s ease,
+    height 0.08s ease,
+    border-radius 0.08s ease;
+}
+
+.vco-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  max-width: min(360px, calc(100vw - 32px));
+  border: 1px solid #e4e4e1;
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: #111111;
+  background: rgba(255, 255, 255, 0.96);
+  font:
+    650 13px/1.43 Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Microsoft YaHei",
+    sans-serif;
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.vco-player {
+  position: absolute;
+  z-index: 2147483645;
+  overflow: hidden;
+  border: 1px solid #e4e4e1;
+  background: #ffffff;
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.vco-player video,
+.vco-player iframe,
+.vco-web {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #ffffff;
+}
+
+.vco-player video {
+  object-fit: cover;
+}
+
+.vco-web {
+  position: relative;
+}
+
+.vco-web-frame {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+}
+
+.vco-web-mobile {
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  overflow: auto;
+  background: #f7f7f5;
+  scrollbar-width: thin;
+}
+
+.vco-web-mobile .vco-web-frame {
+  width: 390px;
+  height: 720px;
+  max-width: none;
+  max-height: none;
+  border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transform-origin: top center;
+}
+
+.vco-web-toolbar {
+  position: absolute;
+  right: 42px;
+  top: 7px;
+  z-index: 2;
+  display: flex;
+  max-width: calc(100% - 86px);
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: #111111;
+  background: rgba(255, 255, 255, 0.92);
+  font:
+    700 11px/1.2 Inter,
+    ui-sans-serif,
+    system-ui,
+    "Microsoft YaHei",
+    sans-serif;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.vco-web-toolbar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vco-web-toolbar a {
+  flex: 0 0 auto;
+  color: #111111;
+  text-decoration: none;
+}
+
+.vco-web-hint {
+  position: absolute;
+  inset: auto 10px 10px;
+  z-index: 2;
+  border: 1px solid #e4e4e1;
+  border-radius: 16px;
+  padding: 10px 12px;
+  color: #111111;
+  background: rgba(255, 255, 255, 0.94);
+  font:
+    650 12px/1.43 Inter,
+    ui-sans-serif,
+    system-ui,
+    "Microsoft YaHei",
+    sans-serif;
+  text-align: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+}
+
+.vco-restricted {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-content: center;
+  gap: 10px;
+  padding: 18px;
+  color: #111111;
+  background: #ffffff;
+  font:
+    600 13px/1.45 Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Microsoft YaHei",
+    sans-serif;
+  text-align: center;
+}
+
+.vco-restricted strong {
+  font-size: 15px;
+}
+
+.vco-restricted span {
+  max-width: 32em;
+  color: #747474;
+}
+
+.vco-restricted a {
+  justify-self: center;
+  min-width: 106px;
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: #ffffff;
+  background: #000000;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.vco-remove {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #000000;
+  font:
+    800 16px/28px Inter,
+    ui-sans-serif,
+    system-ui,
+    "Microsoft YaHei",
+    sans-serif;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.vco-hidden-original {
+  opacity: 0 !important;
+}

@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "\u5361\u7247\u53e0\u5c42\u52a9\u624b",
+  "description": "\u628a\u89c6\u9891\u6216\u7f51\u9875\u8d34\u5165\u4efb\u610f\u7f51\u9875\u5361\u7247\u533a\u57df\u3002",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "\u5361\u7247\u53e0\u5c42\u52a9\u624b"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_idle"
+    }
+  ]
+}

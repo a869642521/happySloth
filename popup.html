@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>&#21345;&#29255;&#21472;&#23618;&#21161;&#25163;</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <header class="header">
+        <span class="mark" aria-hidden="true"></span>
+        <button id="removeOverlays" class="icon-button" type="button" title="Remove">...</button>
+      </header>
+
+      <section class="card">
+        <div class="title-row">
+          <div>
+            <h1>&#21345;&#29255;&#21472;&#23618;</h1>
+            <p>&#25226;&#35270;&#39057;&#25110;&#32593;&#39029;&#25918;&#21040;&#25351;&#23450;&#21345;&#29255;&#37324;&#12290;</p>
+          </div>
+          <span class="meta">&#23601;&#32490;</span>
+        </div>
+
+        <fieldset class="mode-control" aria-label="&#21472;&#23618;&#27169;&#24335;">
+          <label>
+            <input name="mode" type="radio" value="video" checked />
+            <span>&#35270;&#39057;</span>
+          </label>
+          <label>
+            <input name="mode" type="radio" value="web" />
+            <span>&#32593;&#39029;</span>
+          </label>
+        </fieldset>
+
+        <fieldset class="viewport-control" aria-label="&#32593;&#39029;&#35270;&#21475;">
+          <label>
+            <input name="viewportMode" type="radio" value="auto" checked />
+            <span>&#33258;&#36866;&#24212;</span>
+          </label>
+          <label>
+            <input name="viewportMode" type="radio" value="mobile" />
+            <span>&#31227;&#21160;&#31471;</span>
+          </label>
+        </fieldset>
+
+        <label class="field">
+          <span id="urlLabel">&#35270;&#39057;&#38142;&#25509;</span>
+          <textarea id="videoUrl" rows="3" placeholder="https://example.com/video.mp4"></textarea>
+        </label>
+
+        <section class="options" aria-label="&#36873;&#39033;">
+          <label class="check">
+            <input id="savePlacement" type="checkbox" checked />
+            <span>&#20445;&#23384;&#20301;&#32622;</span>
+          </label>
+          <label class="check">
+            <input id="hideOriginal" type="checkbox" />
+            <span>&#38544;&#34255;&#21407;&#20869;&#23481;</span>
+          </label>
+        </section>
+
+        <div class="actions">
+          <button id="pickCard" class="primary" type="button">&#36873;&#25321;&#21345;&#29255;</button>
+          <button id="restoreSaved" type="button">&#24674;&#22797;</button>
+        </div>
+
+        <p id="message" class="message" role="status"></p>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
