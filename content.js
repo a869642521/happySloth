@@ -4,12 +4,17 @@ const MOBILE_VIEWPORT_HEIGHT = 720;
 
 let pickerState = null;
 let toastTimer = null;
+let activeOverlay = null;
+let floatingControls = null;
 const overlays = new Set();
 const isVcoChildFrame = window.top !== window;
+const isVcoManagedFrame = isVcoChildFrame && window.name?.startsWith("vco-web-frame");
 
-if (isVcoChildFrame) {
+if (isVcoManagedFrame) {
   installFrameVideoInterceptor();
-} else {
+  installFrameNavigationControls();
+  notifyFrameLocation();
+} else if (!isVcoChildFrame) {
   window.addEventListener("scroll", syncAllOverlays, true);
   window.addEventListener("resize", syncAllOverlays);
 
@@ -42,6 +47,12 @@ if (isVcoChildFrame) {
       return true;
     }
 
+    if (message?.type === "VCO_FRAME_LOCATION_UPDATE") {
+      updateActiveOverlayLocation(message.payload?.url);
+      sendResponse({ ok: true });
+      return true;
+    }
+
     return false;
   });
 
@@ -65,7 +76,7 @@ function startPicking(payload) {
     onKeyDown: (event) => {
       if (event.key === "Escape") {
         stopPicking();
-        showToast("已退出选择模式。");
+        showToast("\u5df2\u9000\u51fa\u9009\u62e9\u6a21\u5f0f\u3002");
       }
     }
   };
@@ -73,7 +84,7 @@ function startPicking(payload) {
   document.addEventListener("pointermove", pickerState.onPointerMove, true);
   document.addEventListener("click", pickerState.onClick, true);
   document.addEventListener("keydown", pickerState.onKeyDown, true);
-  showToast("移动到卡片上并点击确认，按 Esc 取消。");
+  showToast("\u79fb\u52a8\u5230\u5361\u7247\u4e0a\u5e76\u70b9\u51fb\u786e\u8ba4\uff0c\u6309 Esc \u53d6\u6d88\u3002");
 }
 
 function stopPicking() {
@@ -123,7 +134,27 @@ function pickHoveredTarget(event) {
     savePlacement(target, payload);
   }
 
-  showToast(payload.mode === "web" ? "网页已放入目标卡片。" : "视频已放入目标卡片。");
+  showToast(getPlacementToast(payload.mode));
+}
+
+function installFrameNavigationControls() {
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    if (event.data?.type !== "VCO_FRAME_GO_BACK") return;
+
+    try {
+      history.back();
+    } catch {
+      // The parent frame cannot inspect cross-origin state, so failures are best-effort.
+    }
+  });
+}
+
+function notifyFrameLocation() {
+  chrome.runtime.sendMessage({
+    type: "VCO_FRAME_LOCATION_UPDATE",
+    url: location.href
+  });
 }
 
 function installFrameVideoInterceptor() {
@@ -217,13 +248,12 @@ function findCardCandidate(start) {
 function placeVideo(target, payload) {
   payload = {
     ...payload,
-    mode: payload.mode === "web" ? "web" : "video",
+    mode: normalizeMode(payload.mode),
     viewportMode: payload.viewportMode === "mobile" ? "mobile" : "auto",
     videoUrl: normalizeVideoUrl(payload.videoUrl)
   };
 
-  const previous = [...overlays].find((entry) => entry.target === target);
-  if (previous) removeOverlay(previous);
+  removeAllOverlays();
 
   const wrapper = document.createElement("div");
   wrapper.className = "vco-player";
@@ -234,17 +264,7 @@ function placeVideo(target, payload) {
   closeButton.className = "vco-remove";
   closeButton.type = "button";
   closeButton.textContent = "x";
-  closeButton.title = "移除叠层";
-
-  const media = payload.mode === "web"
-    ? createWebsiteElement(payload.videoUrl, payload.viewportMode)
-    : createMediaElement(payload.videoUrl);
-  wrapper.append(closeButton, media);
-  document.documentElement.append(wrapper);
-
-  if (payload.hideOriginal) {
-    target.classList.add("vco-hidden-original");
-  }
+  closeButton.title = "\u79fb\u9664\u53e0\u5c42";
 
   const entry = {
     target,
@@ -252,10 +272,28 @@ function placeVideo(target, payload) {
     mode: payload.mode,
     videoUrl: payload.videoUrl,
     viewportMode: payload.viewportMode,
+    homeUrl: payload.videoUrl,
+    currentUrl: payload.videoUrl,
+    iframe: null,
+    label: null,
+    returnUrl: null,
+    isWebVideoPlayback: false,
+    castControlBaseUrl: null,
     hiddenOriginal: payload.hideOriginal,
-    resizeObserver: new ResizeObserver(() => syncOverlay(entry)),
-    intervalId: window.setInterval(() => syncOverlay(entry), 250)
+    resizeObserver: null,
+    intervalId: null
   };
+
+  const media = createOverlayMediaElement(payload, entry);
+  wrapper.append(closeButton, media);
+  document.documentElement.append(wrapper);
+
+  if (payload.hideOriginal) {
+    target.classList.add("vco-hidden-original");
+  }
+
+  entry.resizeObserver = new ResizeObserver(() => syncOverlay(entry));
+  entry.intervalId = window.setInterval(() => syncOverlay(entry), 250);
 
   closeButton.addEventListener("click", (event) => {
     event.preventDefault();
@@ -265,7 +303,31 @@ function placeVideo(target, payload) {
 
   entry.resizeObserver.observe(target);
   overlays.add(entry);
+  activeOverlay = entry;
+  renderFloatingControls();
   syncOverlay(entry);
+}
+
+function normalizeMode(mode) {
+  return ["video", "web", "cast"].includes(mode) ? mode : "video";
+}
+
+function getPlacementToast(mode) {
+  if (mode === "web") return "\u7f51\u9875\u5df2\u653e\u5165\u76ee\u6807\u5361\u7247\u3002";
+  if (mode === "cast") return "\u6295\u5c4f\u5df2\u653e\u5165\u76ee\u6807\u5361\u7247\u3002";
+  return "\u89c6\u9891\u5df2\u653e\u5165\u76ee\u6807\u5361\u7247\u3002";
+}
+
+function createOverlayMediaElement(payload, entry) {
+  if (payload.mode === "web") {
+    return createWebsiteElement(payload.videoUrl, payload.viewportMode, entry);
+  }
+
+  if (payload.mode === "cast") {
+    return createCastElement(payload.videoUrl, entry);
+  }
+
+  return createMediaElement(payload.videoUrl);
 }
 
 function playVideoInLatestWebOverlay(videoUrl) {
@@ -281,13 +343,19 @@ function playVideoInLatestWebOverlay(videoUrl) {
   const closeButton = entry.wrapper.querySelector(".vco-remove");
   if (!closeButton) return false;
 
+  const returnUrl = entry.currentUrl || entry.homeUrl;
   const media = createMediaElement(videoUrl);
   entry.wrapper.replaceChildren(closeButton, media);
-  entry.mode = "video";
+  entry.mode = "web";
   entry.videoUrl = videoUrl;
-  entry.wrapper.dataset.vcoMode = "video";
+  entry.wrapper.dataset.vcoMode = "web";
   entry.wrapper.dataset.vcoUrl = videoUrl;
+  entry.iframe = null;
+  entry.returnUrl = returnUrl;
+  entry.isWebVideoPlayback = true;
+  entry.currentUrl = videoUrl;
   syncOverlay(entry);
+  renderFloatingControls();
   showToast("\u5df2\u5728\u5f53\u524d\u5361\u7247\u5185\u64ad\u653e\u89c6\u9891\u3002");
   return true;
 }
@@ -319,30 +387,234 @@ function createMediaElement(url) {
   return iframe;
 }
 
-function createWebsiteElement(url, viewportMode = "auto") {
+function createCastElement(url, entry = null) {
+  url = normalizeVideoUrl(url);
+  if (entry) {
+    entry.castControlBaseUrl = getCastControlBaseUrl(url);
+  }
+
+  const container = document.createElement("div");
+  container.className = "vco-cast";
+  if (entry?.castControlBaseUrl) {
+    container.dataset.vcoCastControl = "true";
+    installCastPointerControls(container, entry);
+  }
+
+  const media = createCastMediaNode(url);
+  const hint = document.createElement("div");
+  hint.className = "vco-cast-hint";
+  hint.textContent = entry?.castControlBaseUrl
+    ? "\u53ef\u70b9\u51fb\u6216\u62d6\u52a8\u753b\u9762\uff0c\u63a7\u5236\u4fe1\u53f7\u4f1a\u53d1\u9001\u5230\u672c\u5730\u670d\u52a1\u3002"
+    : "\u652f\u6301 MJPEG\u3001\u89c6\u9891\u76f4\u94fe\u6216 WebRTC viewer \u9875\u9762\u3002";
+
+  container.append(media, hint);
+  window.setTimeout(() => {
+    hint.hidden = true;
+  }, 3200);
+
+  return container;
+}
+
+function installCastPointerControls(container, entry) {
+  let pointerStart = null;
+
+  container.addEventListener("pointerdown", (event) => {
+    if (event.target.closest?.(".vco-remove")) return;
+    event.preventDefault();
+    container.setPointerCapture?.(event.pointerId);
+    pointerStart = getCastPointerPayload(event, container);
+  });
+
+  container.addEventListener("pointerup", (event) => {
+    if (!pointerStart) return;
+    event.preventDefault();
+    const pointerEnd = getCastPointerPayload(event, container);
+    const distance = Math.hypot(pointerEnd.x - pointerStart.x, pointerEnd.y - pointerStart.y);
+    const durationMs = Math.max(80, Math.min(1200, Math.round(pointerEnd.timeStamp - pointerStart.timeStamp)));
+
+    if (distance < 0.035) {
+      sendCastControl(entry, "tap", pointerEnd);
+    } else {
+      sendCastControl(entry, "swipe", {
+        from: pointerStart,
+        to: pointerEnd,
+        durationMs
+      });
+    }
+
+    pointerStart = null;
+  });
+
+  container.addEventListener("pointercancel", () => {
+    pointerStart = null;
+  });
+}
+
+function getCastPointerPayload(event, container) {
+  const rect = getCastContentRect(container);
+  const x = clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+  const y = clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+
+  return {
+    x,
+    y,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    width: rect.width,
+    height: rect.height,
+    timeStamp: event.timeStamp
+  };
+}
+
+function getCastContentRect(container) {
+  const media = container.querySelector(".vco-cast-video, .vco-cast-image, .vco-cast-frame");
+  const rect = (media || container).getBoundingClientRect();
+  const mediaWidth = media?.videoWidth || media?.naturalWidth || 0;
+  const mediaHeight = media?.videoHeight || media?.naturalHeight || 0;
+
+  if (!mediaWidth || !mediaHeight || media?.tagName === "IFRAME") return rect;
+
+  const mediaRatio = mediaWidth / mediaHeight;
+  const rectRatio = rect.width / Math.max(1, rect.height);
+
+  if (rectRatio > mediaRatio) {
+    const width = rect.height * mediaRatio;
+    return {
+      left: rect.left + (rect.width - width) / 2,
+      top: rect.top,
+      width,
+      height: rect.height
+    };
+  }
+
+  const height = rect.width / mediaRatio;
+  return {
+    left: rect.left,
+    top: rect.top + (rect.height - height) / 2,
+    width: rect.width,
+    height
+  };
+}
+
+function sendCastControl(entry, action, payload) {
+  if (!entry?.castControlBaseUrl) return;
+  const endpoint = new URL(`/${action}`, entry.castControlBaseUrl).toString();
+
+  chrome.runtime.sendMessage(
+    {
+      type: "VCO_CAST_CONTROL",
+      url: endpoint,
+      payload: {
+        action,
+        ...payload
+      }
+    },
+    (response) => {
+      if (chrome.runtime.lastError || !response?.ok) {
+        showToast("\u672c\u5730\u63a7\u5236\u670d\u52a1\u672a\u54cd\u5e94\u3002");
+        return;
+      }
+      showToast(action === "tap" ? "\u5df2\u53d1\u9001\u70b9\u51fb\u3002" : "\u5df2\u53d1\u9001\u6ed1\u52a8\u3002");
+    }
+  );
+}
+
+function getCastControlBaseUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const hashParams = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+    const controlUrl = hashParams.get("control");
+    if (controlUrl) return new URL(controlUrl).origin;
+    return isLocalControlHost(parsed.hostname) ? parsed.origin : "";
+  } catch {
+    return "";
+  }
+}
+
+function isLocalControlHost(hostname) {
+  const normalized = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (["localhost", "::1"].includes(normalized)) return true;
+  if (/^127\./.test(normalized)) return true;
+  if (/^10\./.test(normalized)) return true;
+  if (/^192\.168\./.test(normalized)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)) return true;
+  return normalized.endsWith(".local");
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function createCastMediaNode(url) {
+  if (isImageStreamUrl(url)) {
+    const image = document.createElement("img");
+    image.className = "vco-cast-image";
+    image.src = url;
+    image.alt = "Phone cast stream";
+    return image;
+  }
+
+  if (isLikelyVideoStreamUrl(url)) {
+    const video = document.createElement("video");
+    video.className = "vco-cast-video";
+    video.src = url;
+    video.controls = true;
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    return video;
+  }
+
+  const iframe = document.createElement("iframe");
+  iframe.className = "vco-cast-frame";
+  iframe.src = url;
+  iframe.allow = "autoplay; fullscreen; clipboard-read; clipboard-write; encrypted-media; picture-in-picture";
+  iframe.allowFullscreen = true;
+  iframe.referrerPolicy = "strict-origin-when-cross-origin";
+  return iframe;
+}
+
+function isImageStreamUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const sample = `${parsed.pathname}${parsed.search}`.toLowerCase();
+    return /\.(mjpeg|mjpg|jpg|jpeg|png|gif)(\?|$)/.test(sample) ||
+      sample.includes("mjpeg") ||
+      sample.includes("snapshot") ||
+      sample.includes("image");
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyVideoStreamUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const sample = `${parsed.pathname}${parsed.search}`.toLowerCase();
+    return /\.(mp4|webm|ogg|ogv|mov|m3u8|mpd)(\?|$)/.test(sample) ||
+      sample.includes("stream") ||
+      sample.includes("video");
+  } catch {
+    return false;
+  }
+}
+
+function createWebsiteElement(url, viewportMode = "auto", entry = null) {
   if (viewportMode === "mobile") {
     url = toMobileWebsiteUrl(url);
+  }
+
+  if (entry) {
+    entry.homeUrl = url;
+    entry.currentUrl = url;
   }
 
   const container = document.createElement("div");
   container.className = viewportMode === "mobile" ? "vco-web vco-web-mobile" : "vco-web";
 
-  const toolbar = document.createElement("div");
-  toolbar.className = "vco-web-toolbar";
-
-  const label = document.createElement("span");
-  label.textContent = getReadableHost(url);
-
-  const openLink = document.createElement("a");
-  openLink.href = url;
-  openLink.target = "_blank";
-  openLink.rel = "noreferrer";
-  openLink.textContent = "打开";
-
-  toolbar.append(label, openLink);
-
   const iframe = document.createElement("iframe");
   iframe.className = "vco-web-frame";
+  iframe.name = `vco-web-frame-${Date.now()}`;
   iframe.src = url;
   if (viewportMode === "mobile") {
     iframe.dataset.vcoMobileFrame = "true";
@@ -351,10 +623,11 @@ function createWebsiteElement(url, viewportMode = "auto") {
   }
   iframe.allow = "autoplay; fullscreen; clipboard-read; clipboard-write; encrypted-media; picture-in-picture";
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
+  if (entry) entry.iframe = iframe;
 
   const hint = document.createElement("div");
   hint.className = "vco-web-hint";
-  hint.textContent = "如果网站禁止嵌入，请点击“打开”。";
+  hint.textContent = "\u5982\u679c\u7f51\u7ad9\u7981\u6b62\u5d4c\u5165\uff0c\u8bf7\u7528\u53f3\u4e0b\u89d2\u6d6e\u7a97\u6253\u5f00\u3002";
 
   const hintTimer = window.setTimeout(() => {
     hint.hidden = false;
@@ -363,12 +636,137 @@ function createWebsiteElement(url, viewportMode = "auto") {
   iframe.addEventListener("load", () => {
     window.clearTimeout(hintTimer);
     hint.hidden = true;
+    if (entry) {
+      entry.currentUrl = iframe.src;
+    }
   });
 
   hint.hidden = true;
-  container.append(iframe, toolbar, hint);
+  container.append(iframe, hint);
   window.requestAnimationFrame(() => fitMobileFrames(container));
   return container;
+}
+
+function goBackInActiveOverlay() {
+  const entry = getActiveWebOverlay();
+  if (entry?.isWebVideoPlayback && entry.returnUrl) {
+    restoreWebsiteInOverlay(entry, entry.returnUrl);
+    showToast("\u5df2\u8fd4\u56de\u89c6\u9891\u524d\u7684\u7f51\u9875\u3002");
+    return true;
+  }
+
+  if (!entry?.iframe?.contentWindow) {
+    showToast("\u5f53\u524d\u9875\u9762\u65e0\u6cd5\u8fd4\u56de\u3002");
+    return false;
+  }
+
+  entry.iframe.contentWindow.postMessage({ type: "VCO_FRAME_GO_BACK" }, "*");
+  showToast("\u5df2\u5c1d\u8bd5\u8fd4\u56de\u4e0a\u4e00\u9875\u3002");
+  return true;
+}
+
+function goHomeInActiveOverlay() {
+  const entry = getActiveWebOverlay();
+  if (!entry?.homeUrl) {
+    showToast("\u5f53\u524d\u5361\u7247\u6ca1\u6709\u4e3b\u9875\u3002");
+    return false;
+  }
+
+  if (!entry.iframe || entry.isWebVideoPlayback) {
+    restoreWebsiteInOverlay(entry, entry.homeUrl);
+    showToast("\u5df2\u56de\u5230\u5361\u7247\u4e3b\u9875\u3002");
+    return true;
+  }
+
+  entry.currentUrl = entry.homeUrl;
+  entry.iframe.src = entry.homeUrl;
+  showToast("\u5df2\u56de\u5230\u5361\u7247\u4e3b\u9875\u3002");
+  return true;
+}
+
+function restoreWebsiteInOverlay(entry, url) {
+  const closeButton = entry.wrapper.querySelector(".vco-remove");
+  if (!closeButton) return false;
+
+  entry.isWebVideoPlayback = false;
+  entry.returnUrl = null;
+  entry.currentUrl = url;
+  entry.wrapper.dataset.vcoMode = "web";
+  entry.wrapper.dataset.vcoUrl = url;
+
+  const website = createWebsiteElement(url, entry.viewportMode, entry);
+  entry.wrapper.replaceChildren(closeButton, website);
+  syncOverlay(entry);
+  renderFloatingControls();
+  return true;
+}
+
+function openActiveOverlay() {
+  const entry = getActiveWebOverlay();
+  const url = entry?.currentUrl || entry?.homeUrl;
+  if (!url) return false;
+
+  window.open(url, "_blank", "noopener,noreferrer");
+  return true;
+}
+
+function updateActiveOverlayLocation(url) {
+  const entry = getActiveWebOverlay();
+  if (!entry || !url) return false;
+
+  entry.currentUrl = normalizeVideoUrl(url);
+  if (entry.label) entry.label.textContent = getReadableHost(entry.currentUrl);
+  return true;
+}
+
+function removeActiveOverlay() {
+  if (!activeOverlay) return false;
+  removeOverlay(activeOverlay);
+  return true;
+}
+
+function getActiveWebOverlay() {
+  if (activeOverlay?.mode === "web" && overlays.has(activeOverlay)) return activeOverlay;
+  return [...overlays].find((entry) => entry.mode === "web") || null;
+}
+
+function renderFloatingControls() {
+  const entry = getActiveWebOverlay();
+  if (!entry) {
+    hideFloatingControls();
+    return;
+  }
+
+  if (!floatingControls) {
+    floatingControls = document.createElement("div");
+    floatingControls.className = "vco-floating-controls";
+    floatingControls.append(
+      createFloatingButton("\u8fd4\u56de", goBackInActiveOverlay),
+      createFloatingButton("\u4e3b\u9875", goHomeInActiveOverlay),
+      createFloatingButton("\u6253\u5f00", openActiveOverlay),
+      createFloatingButton("\u5173\u95ed", removeActiveOverlay)
+    );
+    document.documentElement.append(floatingControls);
+  }
+
+  floatingControls.hidden = false;
+}
+
+function createFloatingButton(text, onClick) {
+  const button = document.createElement("button");
+  button.className = "vco-floating-button";
+  button.type = "button";
+  button.textContent = text;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClick();
+  });
+  return button;
+}
+
+function hideFloatingControls() {
+  if (floatingControls) floatingControls.hidden = true;
 }
 
 function toMobileWebsiteUrl(url) {
@@ -553,6 +951,8 @@ function removeOverlay(entry) {
   entry.wrapper.remove();
   if (entry.hiddenOriginal) entry.target.classList.remove("vco-hidden-original");
   overlays.delete(entry);
+  if (activeOverlay === entry) activeOverlay = null;
+  if (!getActiveWebOverlay()) hideFloatingControls();
 }
 
 function removeAllOverlays() {
@@ -579,10 +979,16 @@ function fitMobileFrames(root) {
 }
 
 async function savePlacement(target, payload) {
+  const normalizedMode = normalizeMode(payload.mode);
+  const normalizedViewportMode = payload.viewportMode === "mobile" ? "mobile" : "auto";
+  const savedUrl = normalizedMode === "web" && normalizedViewportMode === "mobile"
+    ? toMobileWebsiteUrl(normalizeVideoUrl(payload.videoUrl))
+    : normalizeVideoUrl(payload.videoUrl);
+
   const record = {
-    mode: payload.mode === "web" ? "web" : "video",
-    viewportMode: payload.viewportMode === "mobile" ? "mobile" : "auto",
-    videoUrl: payload.videoUrl,
+    mode: normalizedMode,
+    viewportMode: normalizedViewportMode,
+    videoUrl: savedUrl,
     hideOriginal: payload.hideOriginal,
     selector: getStableSelector(target),
     savedAt: Date.now()

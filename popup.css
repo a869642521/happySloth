@@ -143,6 +143,11 @@ p {
   padding: 0;
 }
 
+.mode-control {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .viewport-control {
   margin-bottom: 14px;
 }
@@ -154,7 +159,7 @@ p {
   min-height: 34px;
   place-items: center;
   border-radius: 999px;
-  padding: 0 16px;
+  padding: 0 12px;
   color: #555555;
   background: #eeeeec;
   font-size: 13px;

@@ -78,7 +78,7 @@ function getSelectedMode() {
 }
 
 function setSelectedMode(mode) {
-  const normalizedMode = mode === "web" ? "web" : "video";
+  const normalizedMode = ["video", "web", "cast"].includes(mode) ? mode : "video";
   modeInputs.forEach((input) => {
     input.checked = input.value === normalizedMode;
   });
@@ -96,12 +96,28 @@ function setSelectedViewportMode(mode) {
 }
 
 function updateModeText() {
-  const isWebMode = getSelectedMode() === "web";
-  urlLabel.textContent = isWebMode ? "\u7f51\u9875\u94fe\u63a5" : "\u89c6\u9891\u94fe\u63a5";
-  videoUrlInput.placeholder = isWebMode
-    ? "https://www.bilibili.com"
-    : "https://example.com/video.mp4";
-  pickCardButton.textContent = isWebMode ? "\u9009\u62e9\u7f51\u9875\u5361\u7247" : "\u9009\u62e9\u5361\u7247";
+  const mode = getSelectedMode();
+  const copyByMode = {
+    video: {
+      label: "\u89c6\u9891\u94fe\u63a5",
+      placeholder: "https://example.com/video.mp4",
+      button: "\u9009\u62e9\u5361\u7247"
+    },
+    web: {
+      label: "\u7f51\u9875\u94fe\u63a5",
+      placeholder: "https://www.bilibili.com",
+      button: "\u9009\u62e9\u7f51\u9875\u5361\u7247"
+    },
+    cast: {
+      label: "\u6295\u5c4f\u5730\u5740",
+      placeholder: "http://localhost:8080/stream.mjpeg",
+      button: "\u9009\u62e9\u6295\u5c4f\u5361\u7247"
+    }
+  };
+  const copy = copyByMode[mode] || copyByMode.video;
+  urlLabel.textContent = copy.label;
+  videoUrlInput.placeholder = copy.placeholder;
+  pickCardButton.textContent = copy.button;
 }
 
 function normalizeUrl(value) {
