@@ -20,9 +20,14 @@ createServer(async (request, response) => {
   const url = new URL(request.url || "/", `http://${request.headers.host}`);
 
   try {
+    if (request.method === "GET" && url.pathname === "/") {
+      sendJson(response, 200, getServiceInfo(null));
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/health") {
-      await getScreenSize();
-      sendJson(response, 200, { ok: true, deviceSize: cachedSize });
+      const size = await getScreenSize();
+      sendJson(response, 200, getServiceInfo(size));
       return;
     }
 
@@ -62,9 +67,27 @@ createServer(async (request, response) => {
   }
 }).listen(port, () => {
   console.log(`ADB control server running at http://localhost:${port}`);
+  console.log(`Use #control=http://localhost:${port} in the extension cast URL.`);
   if (dryRun) console.log("DRY_RUN=1 is enabled; commands will be logged but not sent to a device.");
   console.log("Set ADB_DEVICE=<serial> if you have more than one Android device.");
 });
+
+function getServiceInfo(deviceSize) {
+  return {
+    ok: true,
+    service: "happySloth-adb-control",
+    controlUrl: `http://localhost:${port}`,
+    adbPath,
+    deviceId: deviceId || null,
+    dryRun,
+    deviceSize,
+    endpoints: {
+      health: "GET /health",
+      tap: "POST /tap",
+      swipe: "POST /swipe"
+    }
+  };
+}
 
 async function toDevicePoint(point = {}) {
   const size = await getScreenSize();

@@ -78,8 +78,9 @@ $env:DRY_RUN="1"; $env:DEVICE_SIZE="1080x2400"; node adb-control-server.mjs
 1. 电脑安装 Android Platform Tools，并确保 `adb` 在 PATH 里。
 2. 手机打开 USB 调试，连接电脑并完成授权。
 3. 运行 `adb devices` 能看到设备。
-4. 启动投屏画面服务，例如 MJPEG、WebRTC 或 scrcpy 相关 viewer。
-5. 在扩展里选择 `投屏`，填入类似 `http://localhost:8080/stream.mjpeg#control=http://localhost:4174` 的地址。
+4. 手机端启动 HTTP 投屏 App，例如 Screen Stream over HTTP，拿到类似 `http://手机IP:8080/stream.mjpeg` 的画面地址。
+5. 在扩展里选择 `投屏`，粘贴画面地址；如果没有 `#control=...`，弹窗会自动补成 `#control=http://localhost:4174`。
+6. 可在弹窗里点“检查服务”，确认本地 ADB 控制服务和手机连接正常。
 
 控制接口格式：
 
